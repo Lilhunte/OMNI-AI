@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OMNI-CAN-AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              clifford: '#da373d',
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+        /* Ensure the body takes full height */
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex flex-col h-full">
+
+    <header class="bg-gray-800 p-4 flex justify-between items-center flex-shrink-0">
+        <h1 class="text-2xl font-bold">OMNI-CAN-AI</h1>
+        <div id="user-button-container"></div>
+    </header>
+
+    <div class="flex flex-grow overflow-hidden">
+        <!-- This section is for unauthenticated users -->
+        <section id="auth-section" class="flex flex-col items-center justify-center w-full">
+            <div class="text-center">
+                <h2 class="text-3xl font-bold mb-4">Welcome!</h2>
+                <p class="text-gray-400 mb-8">Sign in to continue to OMNI-CAN-AI</p>
+                <div id="sign-in-component" class="w-full max-w-md mx-auto"></div>
+            </div>
+        </section>
+
+        <!-- This section is for authenticated users -->
+        <main id="app-content" style="display: none;" class="flex flex-grow w-full">
+            <!-- Left Sidebar for Conversations -->
+            <aside class="w-1/4 bg-gray-800 p-4 overflow-y-auto">
+                <h2 class="text-xl font-bold mb-4">Conversations</h2>
+                <div id="conversation-list">
+                    <!-- Example Conversation Item -->
+                    <div class="p-2 rounded-lg hover:bg-gray-700 cursor-pointer">
+                        <p class="font-semibold">Default Conversation</p>
+                        <p class="text-sm text-gray-400">The primary chat thread.</p>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Main Chat Area -->
+            <section class="w-3/4 flex flex-col bg-gray-900">
+                <!-- Messages Display -->
+                <div id="messages-container" class="flex-grow p-4 overflow-y-auto">
+                    <!-- Messages will be rendered here by js/app.js -->
+                </div>
+
+                <!-- Prompt Input Form -->
+                <div class="p-4 bg-gray-800 border-t border-gray-700">
+                    <form id="prompt-form" class="flex items-center">
+                        <input id="prompt-input" type="text" placeholder="Type your prompt here..." class="flex-grow bg-gray-700 rounded-l-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-white">
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-r-lg">
+                            Send
+                        </button>
+                    </form>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="js/auth.js"></script>
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
