@@ -1,10 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-// --- Supabase and Clerk Configuration ---
-const supabaseUrl = 'https://oztifuyijinimlowqviu.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im96dGlmdXlpamluaW1sb3dxdml1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkxNTE5MzIsImV4cCI6MjA3NDcyNzkzMn0.eXTGVvWyk025L414pt9Yj0jifPAMP5sDgsPMW-z6GLE';
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { supabase } from './supabaseClient.js';
 let activeConversationId = null; // This will be set when a conversation is selected or created.
 
 // --- DOM Elements ---
@@ -48,6 +42,12 @@ const renderMessage = (message) => {
  */
 const loadConversation = async (conversationId) => {
     activeConversationId = conversationId;
+
+    // Highlight the active conversation in the list
+    document.querySelectorAll('#conversation-list [data-conversation-id]').forEach(el => {
+        el.classList.toggle('bg-gray-700', el.dataset.conversationId == conversationId);
+    });
+
     messagesContainer.innerHTML = '<p class="text-center text-gray-500">Loading messages...</p>';
 
     const { data: messages, error } = await supabase
@@ -79,7 +79,7 @@ const handlePromptSubmit = async (e) => {
     }
 
     // Add user's message to the UI immediately
-    renderMessage({ kind: 'text', body: promptText });
+    renderMessage({ kind: 'text', body: promptText, sender_id: (await supabase.auth.getUser()).data.user.id });
     promptInput.value = '';
 
     try {
@@ -114,49 +114,110 @@ const handlePromptSubmit = async (e) => {
 };
 
 /**
+ * Renders the list of conversations in the sidebar.
+ * @param {Array} conversations - An array of conversation objects.
+ */
+const renderConversationList = (conversations) => {
+    conversationList.innerHTML = ''; // Clear the list
+    if (!conversations || conversations.length === 0) {
+        conversationList.innerHTML = '<p class="text-gray-400">No conversations yet.</p>';
+        return;
+    }
+
+    conversations.forEach(convo => {
+        const convoEl = document.createElement('div');
+        convoEl.classList.add('p-2', 'rounded-lg', 'hover:bg-gray-600', 'cursor-pointer', 'mb-2');
+        convoEl.dataset.conversationId = convo.id;
+        convoEl.innerHTML = `<p class="font-semibold truncate">${convo.title}</p>`;
+
+        convoEl.addEventListener('click', () => {
+            if (activeConversationId !== convo.id) {
+                loadConversation(convo.id);
+            }
+        });
+        conversationList.appendChild(convoEl);
+    });
+};
+
+/**
+ * Ensures the current user has a conversation, creating one if not.
+ * Then loads the first conversation.
+ */
+const initializeConversation = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // 1. Check for existing conversations
+    let { data: conversations, error } = await supabase
+        .from('conversations')
+        .select('id, title')
+        .eq('owner_id', user.id)
+        .order('created_at', { ascending: true });
+
+    if (error) {
+        console.error('Error fetching conversations:', error);
+        return;
+    }
+
+    // 2. If no conversation exists, create one
+    if (conversations.length === 0) {
+        const { data: newConversation, error: createError } = await supabase
+            .from('conversations')
+            .insert({ owner_id: user.id, title: 'Default Conversation' })
+            .select('id, title')
+            .single();
+
+        if (createError) {
+            console.error('Error creating conversation:', createError);
+            return;
+        }
+        conversations = [newConversation];
+    }
+
+    // 3. Render the conversation list and load the first one
+    renderConversationList(conversations);
+    if (conversations.length > 0) {
+        loadConversation(conversations[0].id);
+    }
+};
+
+/**
  * Subscribes to real-time updates for new messages.
  */
 const subscribeToMessages = () => {
-    supabase.channel('public:messages')
+    const channel = supabase.channel('public:messages')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
-            // Check if the new message belongs to the active conversation
             if (payload.new.conversation_id === activeConversationId) {
                 renderMessage(payload.new);
             }
         })
         .subscribe();
+    return channel;
 };
 
 // --- Initialization ---
-document.addEventListener('DOMContentLoaded', () => {
-    // Only set up the app if the app-content section is visible
-    if (document.getElementById('app-content').style.display !== 'none') {
-        promptForm.addEventListener('submit', handlePromptSubmit);
+let messageChannel = null;
 
-        // For now, let's create/use a default conversation
-        // In a real app, you would fetch and list conversations.
-        // For simplicity, we'll hardcode a conversation to start.
-        loadConversation(1); // You'd need to create a conversation with ID 1 in your DB
+const initializeApp = () => {
+    promptForm.addEventListener('submit', handlePromptSubmit);
+    initializeConversation();
+    if (messageChannel) {
+        supabase.removeChannel(messageChannel);
+    }
+    messageChannel = subscribeToMessages();
+};
 
-        subscribeToMessages();
+// Listen for auth state changes to initialize or tear down the app
+supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_IN') {
+        initializeApp();
     }
 });
 
-// We need to re-initialize the app logic when the user logs in.
-// A simple way is to listen for changes on the app-content element.
-const observer = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-        if (mutation.attributeName === 'style') {
-            const display = document.getElementById('app-content').style.display;
-            if (display === 'block') {
-                promptForm.addEventListener('submit', handlePromptSubmit);
-                // Hardcoded conversation for now
-                // TODO: Replace with dynamic conversation loading
-                loadConversation(1);
-                subscribeToMessages();
-            }
-        }
+// Also initialize on page load if the user is already signed in
+document.addEventListener('DOMContentLoaded', async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+        initializeApp();
     }
 });
-
-observer.observe(document.getElementById('app-content'), { attributes: true });

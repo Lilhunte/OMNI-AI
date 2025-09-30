@@ -1,54 +1,68 @@
-const publishableKey = "pk_test_YWNjZXB0ZWQtb3gtNTEuY2xlcmsuYWNjb3VudHMuZGV2JA";
+import { supabase } from './supabaseClient.js';
 
-const startClerk = async () => {
-    const Clerk = window.Clerk;
+// --- DOM Elements ---
+const authContainer = document.getElementById('auth-container');
+const authSection = document.getElementById('auth-section');
+const appContent = document.getElementById('app-content');
 
-    if (!Clerk) {
-        console.error("Clerk.js not loaded");
-        return;
-    }
+// --- Auth Functions ---
 
-    try {
-        await Clerk.load();
-
-        const userButtonContainer = document.getElementById('user-button-container');
-        const signInComponent = document.getElementById('sign-in-component');
-        const authSection = document.getElementById('auth-section');
-        const appContent = document.getElementById('app-content');
-
-        Clerk.addListener(({ user }) => {
-            if (user) {
-                // Mount user button and show app content
-                Clerk.mountUserButton(userButtonContainer);
-                authSection.style.display = 'none';
-                appContent.style.display = 'block';
-            } else {
-                // Mount sign in and show auth section
-                Clerk.mountSignIn(signInComponent, {
-                    appearance: {
-                        baseTheme: 'dark'
-                    }
-                });
-                authSection.style.display = 'block';
-                appContent.style.display = 'none';
-                // Clear user button if it exists
-                userButtonContainer.innerHTML = '';
-            }
-        });
-
-    } catch (err) {
-        console.error("Error loading Clerk:", err);
+const signInWithGoogle = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+    });
+    if (error) {
+        console.error('Error signing in with Google:', error);
     }
 };
 
-// Load Clerk.js script
-const clerkScript = document.createElement('script');
-clerkScript.setAttribute('data-clerk-publishable-key', publishableKey);
-clerkScript.async = true;
-clerkScript.src = `https://cdn.clerk.dev/clerk.browser.js`;
-clerkScript.crossOrigin = 'anonymous';
-clerkScript.addEventListener('load', startClerk);
-clerkScript.addEventListener('error', () => {
-  document.getElementById('auth-section').innerHTML = '<p>Error loading authentication service.</p>';
+const signOut = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+        console.error('Error signing out:', error);
+    }
+};
+
+// --- UI Update Logic ---
+
+const setupUI = (user) => {
+    if (user) {
+        // User is signed in
+        authContainer.innerHTML = `
+            <button id="sign-out-button" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
+                Sign Out
+            </button>
+        `;
+        document.getElementById('sign-out-button').addEventListener('click', signOut);
+
+        if (authSection) authSection.style.display = 'none';
+        if (appContent) appContent.style.display = 'flex'; // Use flex for main app layout
+
+    } else {
+        // User is signed out
+        authContainer.innerHTML = `
+            <button id="sign-in-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                Sign in with Google
+            </button>
+        `;
+        document.getElementById('sign-in-button').addEventListener('click', signInWithGoogle);
+
+        if (authSection) authSection.style.display = 'flex';
+        if (appContent) appContent.style.display = 'none';
+    }
+};
+
+
+// --- Event Listeners ---
+
+// Listen for authentication state changes
+supabase.auth.onAuthStateChange((_event, session) => {
+    const user = session?.user;
+    setupUI(user);
 });
-document.head.appendChild(clerkScript);
+
+// Initial UI setup on page load
+document.addEventListener('DOMContentLoaded', async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    setupUI(session?.user);
+});

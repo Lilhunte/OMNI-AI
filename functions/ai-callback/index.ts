@@ -62,10 +62,11 @@ serve(async (req) => {
     if (status === 'completed' && job.conversation_id) {
       const messagesToInsert = [];
 
+      // NOTE: AI-generated messages have a null sender_id.
       if (outputs.text) {
         messagesToInsert.push({
           conversation_id: job.conversation_id,
-          sender_id: job.user_id, // Or a dedicated AI user ID
+          sender_id: null,
           kind: 'text',
           body: outputs.text,
         });
@@ -73,7 +74,7 @@ serve(async (req) => {
       if (outputs.code) {
         messagesToInsert.push({
           conversation_id: job.conversation_id,
-          sender_id: job.user_id,
+          sender_id: null,
           kind: 'code',
           body: outputs.code,
         });
@@ -81,7 +82,7 @@ serve(async (req) => {
       if (outputs.images && outputs.images.length > 0) {
         messagesToInsert.push({
           conversation_id: job.conversation_id,
-          sender_id: job.user_id,
+          sender_id: null,
           kind: 'image',
           media: { urls: outputs.images },
         });

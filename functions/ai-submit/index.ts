@@ -58,20 +58,30 @@ serve(async (req) => {
       });
     }
 
-    // 5. Prepare the payload for the AI webhook
+    // 5. Fetch user's profile to get their plan
+    const { data: profile, error: profileError } = await supabaseClient
+      .from('profiles')
+      .select('plan')
+      .eq('id', user.id)
+      .single();
+
+    // Default to 'free' plan if profile not found or on error
+    const userPlan = profile && !profileError ? profile.plan : 'free';
+
+    // 6. Prepare the payload for the AI webhook
     const webhookPayload = {
       job_id: newJob.id,
       user: {
         id: user.id,
         email: user.email,
-        plan: 'pro', // This should be fetched from the user's profile
+        plan: userPlan,
       },
       prompt: prompt,
       inputs: inputs || {},
       options: options || {},
     };
 
-    // 6. Forward the request to the main AI webhook (fire and forget)
+    // 7. Forward the request to the main AI webhook (fire and forget)
     fetch(AI_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
